@@ -53,6 +53,8 @@ export const teamAPI = {
   removeMember: (teamId, volunteerId) =>
     apiClient.post(`/teams/${teamId}/members/${volunteerId}/remove`),
   regenerateCode: (teamId) => apiClient.post(`/teams/${teamId}/regenerate-code`),
+  runTeamAllocation: (teamId, data) => apiClient.post(`/teams/${teamId}/allocation/run`, data),
+  getTeamReport: (teamId, params) => apiClient.get(`/teams/${teamId}/report`, { params }),
 };
 
 // User APIs

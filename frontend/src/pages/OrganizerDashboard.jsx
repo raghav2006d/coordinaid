@@ -467,7 +467,7 @@ const OrganizerDashboard = () => {
               </Card>
 
               <Card hoverable={false} className="shell-panel border-0 p-7">
-                <OrganizerTeamManager />
+                <OrganizerTeamManager events={events} />
               </Card>
 
               <Card hoverable={false} className="shell-panel border-0 p-7">

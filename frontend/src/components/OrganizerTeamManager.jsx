@@ -1,14 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { Copy, RefreshCcw, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  BarChart3,
+  Copy,
+  PlayCircle,
+  RefreshCcw,
+  ShieldCheck,
+  Trophy,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { teamAPI } from '../utils/api.js';
 
-const OrganizerTeamManager = () => {
+const OrganizerTeamManager = ({ events = [] }) => {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', description: '' });
   const [feedback, setFeedback] = useState({ type: 'idle', message: '' });
   const [workingKey, setWorkingKey] = useState('');
+  const [selectedEventByTeam, setSelectedEventByTeam] = useState({});
+  const [reportsByTeam, setReportsByTeam] = useState({});
+  const [allocationByTeam, setAllocationByTeam] = useState({});
+
+  const sortedEvents = useMemo(
+    () =>
+      [...events].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0)),
+    [events]
+  );
 
   const loadTeams = async () => {
     try {
@@ -89,14 +107,49 @@ const OrganizerTeamManager = () => {
       if (response.data?.message) {
         setFeedback({ type: 'success', message: response.data.message });
       }
+      return response;
     } catch (error) {
       console.error('Team action failed:', error);
       setFeedback({
         type: 'error',
         message: error.response?.data?.message || 'Action failed. Please try again.',
       });
+      return null;
     } finally {
       setWorkingKey('');
+    }
+  };
+
+  const runTeamAllocation = async (teamId) => {
+    const selectedEventId = selectedEventByTeam[teamId];
+    if (!selectedEventId) {
+      setFeedback({ type: 'error', message: 'Select an event before running team allocation.' });
+      return;
+    }
+
+    const response = await withTeamUpdate(`allocate-${teamId}`, () =>
+      teamAPI.runTeamAllocation(teamId, { eventId: selectedEventId })
+    );
+
+    if (response?.data) {
+      setAllocationByTeam((current) => ({
+        ...current,
+        [teamId]: response.data,
+      }));
+    }
+  };
+
+  const loadTeamReport = async (teamId) => {
+    const selectedEventId = selectedEventByTeam[teamId];
+    const response = await withTeamUpdate(`report-${teamId}`, () =>
+      teamAPI.getTeamReport(teamId, selectedEventId ? { eventId: selectedEventId } : {})
+    );
+
+    if (response?.data) {
+      setReportsByTeam((current) => ({
+        ...current,
+        [teamId]: response.data,
+      }));
     }
   };
 
@@ -107,7 +160,7 @@ const OrganizerTeamManager = () => {
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#766e97]">Team Builder</p>
           <h4 className="mt-2 text-xl font-bold text-[#1d1736]">Create organizer teams</h4>
           <p className="mt-1 text-sm text-[#5f5a7a]">
-            Build volunteer groups and approve requests from one place.
+            Build volunteer groups, run team AI allocation, and track team performers.
           </p>
         </div>
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef8f3] text-[#0f9f75]">
@@ -187,6 +240,113 @@ const OrganizerTeamManager = () => {
                 </div>
               </div>
 
+              <div className="mt-4 rounded-2xl bg-[#f2f6ff] p-3">
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#4b46c8]">
+                  Team AI Controls
+                </p>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
+                  <select
+                    className="input-field"
+                    value={selectedEventByTeam[team._id] || ''}
+                    onChange={(event) =>
+                      setSelectedEventByTeam((current) => ({
+                        ...current,
+                        [team._id]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select event for team allocation/report</option>
+                    {sortedEvents.map((event) => (
+                      <option key={event._id} value={event._id}>
+                        {event.eventName} ({event.date ? new Date(event.date).toLocaleDateString() : 'No date'})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => runTeamAllocation(team._id)}
+                    disabled={workingKey === `allocate-${team._id}` || !sortedEvents.length}
+                    className="flex items-center justify-center gap-2 rounded-2xl bg-[#0f9f75] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#198a67] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <PlayCircle size={16} />
+                    <span>
+                      {workingKey === `allocate-${team._id}` ? 'Allocating...' : 'Run Team AI Allocation'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadTeamReport(team._id)}
+                    disabled={workingKey === `report-${team._id}`}
+                    className="flex items-center justify-center gap-2 rounded-2xl bg-[#1d1736] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2b2457] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <BarChart3 size={16} />
+                    <span>{workingKey === `report-${team._id}` ? 'Loading...' : 'Team Report'}</span>
+                  </button>
+                </div>
+
+                {allocationByTeam[team._id] && (
+                  <div className="mt-3 rounded-xl bg-white/90 px-3 py-2 text-sm text-[#403b63]">
+                    {allocationByTeam[team._id].totalAssignments || 0} team allocation(s) generated for{' '}
+                    {allocationByTeam[team._id].event?.eventName || 'selected event'}.
+                  </div>
+                )}
+
+                {reportsByTeam[team._id] && (
+                  <div className="mt-3 space-y-3 rounded-xl bg-white/90 p-3">
+                    <div className="grid grid-cols-2 gap-2 text-xs text-[#5f5a7a] md:grid-cols-4">
+                      <div className="rounded-lg bg-[#f8f5ff] p-2">
+                        <p className="font-semibold">Members</p>
+                        <p className="text-base font-black text-[#1d1736]">
+                          {reportsByTeam[team._id].summary?.totalMembers || 0}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-[#eef8f3] p-2">
+                        <p className="font-semibold">Assignments</p>
+                        <p className="text-base font-black text-[#1d1736]">
+                          {reportsByTeam[team._id].summary?.assignments || 0}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-[#f2f6ff] p-2">
+                        <p className="font-semibold">Accepted</p>
+                        <p className="text-base font-black text-[#1d1736]">
+                          {reportsByTeam[team._id].summary?.acceptedAssignments || 0}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-[#fff6e7] p-2">
+                        <p className="font-semibold">Avg Perf.</p>
+                        <p className="text-base font-black text-[#1d1736]">
+                          {reportsByTeam[team._id].summary?.avgTeamPerformance || 0}%
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#766e97]">
+                        <Trophy size={14} />
+                        Best Performers
+                      </p>
+                      {reportsByTeam[team._id].topPerformers?.length ? (
+                        <div className="space-y-2">
+                          {reportsByTeam[team._id].topPerformers.slice(0, 3).map((performer) => (
+                            <div key={performer.volunteerId} className="flex items-center justify-between rounded-lg bg-[#f8f5ff] px-3 py-2">
+                              <div>
+                                <p className="text-sm font-semibold text-[#1d1736]">{performer.name}</p>
+                                <p className="text-xs text-[#5f5a7a]">
+                                  Accept {performer.acceptanceRate}% | Attendance {performer.attendanceRate}%
+                                </p>
+                              </div>
+                              <span className="badge badge-primary">{performer.leaderboardScore}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-[#5f5a7a]">No report data available yet for this scope.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
                 <div className="rounded-2xl bg-[#f8f5ff] p-3">
                   <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#766e97]">
@@ -251,12 +411,17 @@ const OrganizerTeamManager = () => {
                       {team.members.map((member) => {
                         const volunteerId = member.volunteerId?._id || member.volunteerId;
                         return (
-                          <div key={String(volunteerId)} className="flex items-center justify-between rounded-xl bg-white/85 px-3 py-2">
+                          <div
+                            key={String(volunteerId)}
+                            className="flex items-center justify-between rounded-xl bg-white/85 px-3 py-2"
+                          >
                             <div>
                               <p className="text-sm font-semibold text-[#1d1736]">
                                 {member.volunteerId?.name || 'Volunteer'}
                               </p>
-                              <p className="text-xs text-[#5f5a7a]">{member.volunteerId?.department || 'Department not set'}</p>
+                              <p className="text-xs text-[#5f5a7a]">
+                                {member.volunteerId?.department || 'Department not set'}
+                              </p>
                             </div>
                             <button
                               type="button"

@@ -5,10 +5,12 @@ import {
   approveJoinRequest,
   createTeam,
   getTeams,
+  getTeamReport,
   joinTeamByCode,
   regenerateJoinCode,
   rejectJoinRequest,
   removeTeamMember,
+  runTeamAllocation,
 } from '../controllers/teamController.js';
 
 const router = express.Router();
@@ -40,6 +42,18 @@ router.post(
   authenticateToken,
   authorizeRole('organizer', 'admin'),
   regenerateJoinCode
+);
+router.post(
+  '/:teamId/allocation/run',
+  authenticateToken,
+  authorizeRole('organizer', 'admin'),
+  runTeamAllocation
+);
+router.get(
+  '/:teamId/report',
+  authenticateToken,
+  authorizeRole('organizer', 'admin'),
+  getTeamReport
 );
 
 export default router;
