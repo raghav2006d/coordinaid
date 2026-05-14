@@ -17,16 +17,20 @@ const QUICK_SUGGESTIONS_BY_ROLE = {
     'What assignments are pending for me?',
     'Show my attendance summary',
     'Show my performance score',
+    'How many teams am I in?',
+    'Do I have unread notifications?',
     'Any team announcements?',
     'Show my teams',
     'Who is assigned to technical support?',
   ],
   organizer: [
     'List volunteers for this event',
+    'How many volunteers are assigned for this event?',
     'Show staffing gaps for this event',
     'Show attendance summary for this event',
     'Show top volunteers for my events',
     'What is my organizer dashboard summary?',
+    'Do I have unread notifications?',
     'Any team announcements?',
     'Show pending team requests',
     'Who is assigned to technical support?',
@@ -36,6 +40,7 @@ const QUICK_SUGGESTIONS_BY_ROLE = {
   admin: [
     'List volunteers for this event',
     'Show system overview',
+    'What is total users and total events?',
     'Show staffing gaps for this event',
     'Show top volunteers overall',
     'Show attendance summary for this event',
@@ -49,6 +54,23 @@ const QUICK_SUGGESTIONS_BY_ROLE = {
 
 const formatDate = (value) => new Date(value).toLocaleDateString();
 const ACTIVE_ASSIGNMENT_STATUSES = ['pending', 'accepted', 'completed'];
+const getTodayStart = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getEventStateLabel = (eventDoc) => {
+  if (!eventDoc?.date) return 'date-not-set';
+  const today = getTodayStart();
+  const eventDay = new Date(eventDoc.date);
+  eventDay.setHours(0, 0, 0, 0);
+
+  if (eventDoc.status === 'completed') return 'completed';
+  if (eventDay < today) return 'date-passed';
+  if (eventDay.getTime() === today.getTime()) return 'today';
+  return 'upcoming';
+};
 
 const formatTimeRange = (eventDoc, roleDoc = null) => {
   const isFullDay = roleDoc?.isFullDay ?? eventDoc?.isFullDay ?? false;
@@ -66,104 +88,195 @@ const parseEventIdFromPath = (currentPath = '') => {
   return eventId || null;
 };
 
-const parseIntent = (query = '') => {
-  const normalized = query.toLowerCase();
+const normalizeQuery = (query = '') =>
+  String(query)
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  if (
-    normalized.includes('system overview') ||
-    normalized.includes('dashboard summary') ||
-    normalized.includes('dashboard overview')
-  ) {
+const hasAnyKeyword = (normalized, keywords = []) =>
+  keywords.some((keyword) => normalized.includes(keyword));
+
+const INTENT_KEYWORDS = {
+  dashboard_overview: [
+    'system overview',
+    'dashboard summary',
+    'dashboard overview',
+    'admin summary',
+    'total users',
+    'how many users',
+    'user count',
+    'total events',
+    'how many events',
+    'event count',
+    'platform summary',
+  ],
+  assignment_overview: [
+    'assignment summary',
+    'assignment status',
+    'my assignments',
+    'all assignments',
+    'workload',
+    'allocation summary',
+    'task summary',
+  ],
+  attendance_summary: [
+    'attendance',
+    'attendance summary',
+    'present',
+    'absent',
+    'late',
+    'marked attendance',
+    'attendance rate',
+  ],
+  performance_summary: [
+    'performance',
+    'top volunteers',
+    'best performers',
+    'performance score',
+    'leaderboard',
+    'top performer',
+    'volunteer score',
+  ],
+  staffing_insights: [
+    'staffing gap',
+    'coverage',
+    'unfilled role',
+    'volunteers needed',
+    'how many volunteers are assigned',
+    'total volunteers assigned',
+    'assignment coverage',
+    'role coverage',
+  ],
+  team_announcements: [
+    'announcement',
+    'team updates',
+    'team news',
+    'broadcast',
+    'notice from team',
+  ],
+  notifications: [
+    'notification',
+    'notifications',
+    'alert',
+    'alerts',
+    'unread',
+    'latest updates',
+  ],
+  availability: [
+    'availability',
+    'available slots',
+    'my slots',
+    'free time',
+    'time slots',
+  ],
+  my_role: [
+    'my role',
+    'assigned role',
+    'my duty',
+    'my responsibility',
+    'my assignment role',
+  ],
+  teams: [
+    'my teams',
+    'team list',
+    'join code',
+    'join team',
+    'group',
+    'pending team requests',
+    'team requests',
+    'team members',
+    'which team',
+    'teams joined',
+  ],
+  volunteers_by_role: [
+    'technical',
+    'volunteer list',
+    'who is assigned',
+    'show volunteers',
+    'assigned volunteers',
+    'registration volunteers',
+    'crowd volunteers',
+    'support volunteers',
+  ],
+  event_details: [
+    'my event',
+    'event time',
+    'when is',
+    'event date',
+    'event venue',
+    'next event',
+    'event completed',
+    'date passed',
+    'event status',
+  ],
+  pending_assignments: [
+    'pending assignments',
+    'pending assignment',
+    'pending responses',
+    'pending tasks',
+    'waiting response',
+    'awaiting response',
+  ],
+};
+
+const parseIntent = (query = '') => {
+  const normalized = normalizeQuery(query);
+
+  // Priority order avoids accidental matches (for example "pending team requests").
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.dashboard_overview)) {
     return 'dashboard_overview';
   }
 
-  if (
-    normalized.includes('assignment summary') ||
-    normalized.includes('pending for me') ||
-    normalized.includes('my assignments') ||
-    normalized.includes('workload')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.assignment_overview)) {
     return 'assignment_overview';
   }
 
-  if (
-    normalized.includes('attendance') ||
-    normalized.includes('present') ||
-    normalized.includes('absent') ||
-    normalized.includes('late')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.attendance_summary)) {
     return 'attendance_summary';
   }
 
-  if (
-    normalized.includes('performance') ||
-    normalized.includes('top volunteers') ||
-    normalized.includes('best performers') ||
-    normalized.includes('score')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.performance_summary)) {
     return 'performance_summary';
   }
 
-  if (
-    normalized.includes('staffing gap') ||
-    normalized.includes('coverage') ||
-    normalized.includes('unfilled role') ||
-    normalized.includes('volunteers needed')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.staffing_insights)) {
     return 'staffing_insights';
   }
 
-  if (
-    normalized.includes('announcement') ||
-    normalized.includes('team updates') ||
-    normalized.includes('team news')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.team_announcements)) {
     return 'team_announcements';
   }
 
-  if (normalized.includes('notification') || normalized.includes('alert')) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.notifications)) {
     return 'notifications';
   }
 
-  if (normalized.includes('availability')) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.availability)) {
     return 'availability';
   }
 
-  if (
-    normalized.includes('my role') ||
-    normalized.includes('assigned role') ||
-    normalized.includes('assignment')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.my_role)) {
     return 'my_role';
   }
 
-  if (
-    normalized.includes('team') ||
-    normalized.includes('join code') ||
-    normalized.includes('group')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.teams)) {
     return 'teams';
   }
 
-  if (
-    normalized.includes('technical') ||
-    normalized.includes('volunteer') ||
-    normalized.includes('who is assigned') ||
-    normalized.includes('show volunteers')
-  ) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.volunteers_by_role)) {
     return 'volunteers_by_role';
   }
 
   if (
-    normalized.includes('my event') ||
-    normalized.includes('event time') ||
-    normalized.includes('when is') ||
+    hasAnyKeyword(normalized, INTENT_KEYWORDS.event_details) ||
     normalized.includes('event')
   ) {
     return 'event_details';
   }
 
-  if (normalized.includes('pending')) {
+  if (hasAnyKeyword(normalized, INTENT_KEYWORDS.pending_assignments) || normalized.includes('pending')) {
     return 'pending_assignments';
   }
 
@@ -171,11 +284,31 @@ const parseIntent = (query = '') => {
 };
 
 const parseRoleKeyword = (query = '') => {
-  const normalized = query.toLowerCase();
-  if (normalized.includes('technical')) return 'technical';
-  if (normalized.includes('registration')) return 'registration';
-  if (normalized.includes('crowd')) return 'crowd';
-  if (normalized.includes('support')) return 'support';
+  const normalized = normalizeQuery(query);
+  if (
+    normalized.includes('technical') ||
+    normalized.includes('tech support') ||
+    normalized.includes('it support')
+  ) {
+    return 'technical';
+  }
+  if (normalized.includes('registration') || normalized.includes('check in')) {
+    return 'registration';
+  }
+  if (
+    normalized.includes('crowd') ||
+    normalized.includes('security') ||
+    normalized.includes('queue')
+  ) {
+    return 'crowd';
+  }
+  if (
+    normalized.includes('support') ||
+    normalized.includes('help desk') ||
+    normalized.includes('general help')
+  ) {
+    return 'support';
+  }
   return '';
 };
 
@@ -266,11 +399,23 @@ const handleEventIntent = async ({ user, context }) => {
       return 'No upcoming event found for your assignments.';
     }
 
+    const eventState = getEventStateLabel(assignment.eventId);
+    const eventStateText =
+      eventState === 'date-passed'
+        ? 'Date passed'
+        : eventState === 'completed'
+        ? 'Completed'
+        : eventState === 'today'
+        ? 'Today'
+        : 'Upcoming';
+
     return `Your next event is ${assignment.eventId?.eventName || 'an event'} on ${formatDate(
       assignment.eventId?.date
     )} at ${formatTimeRange(assignment.eventId, assignment.roleId)} in ${
       assignment.eventId?.venue || 'the assigned venue'
-    }.`;
+    }.\nEvent status: ${eventStateText}${
+      eventState === 'date-passed' ? ' (mark event completed from organizer/admin panel if done).' : ''
+    }`;
   }
 
   const contextEvent = await resolveContextEvent({ user, context });
@@ -278,9 +423,21 @@ const handleEventIntent = async ({ user, context }) => {
     return 'No upcoming event found. Create an event first to use coordinator insights.';
   }
 
+  const eventState = getEventStateLabel(contextEvent);
+  const eventStateText =
+    eventState === 'date-passed'
+      ? 'Date passed'
+      : eventState === 'completed'
+      ? 'Completed'
+      : eventState === 'today'
+      ? 'Today'
+      : 'Upcoming';
+
   return `Next event: ${contextEvent.eventName} on ${formatDate(contextEvent.date)} at ${formatTimeRange(
     contextEvent
-  )} in ${contextEvent.venue}.`;
+  )} in ${contextEvent.venue}.\nEvent status: ${eventStateText}${
+    eventState === 'date-passed' ? ' (date has passed; complete this event in dashboard if finished).' : ''
+  }`;
 };
 
 const handleAvailabilityIntent = async ({ user }) => {
@@ -712,18 +869,38 @@ const handleDashboardOverviewIntent = async ({ user, context }) => {
     }\nNext event: ${upcoming ? `${upcoming.eventName} on ${formatDate(upcoming.date)}` : 'Not scheduled'}`;
   }
 
-  const [userCounts, eventCounts, teams] = await Promise.all([
+  const [totalUsers, userCounts, events, teams] = await Promise.all([
+    User.countDocuments({}),
     User.aggregate([
       { $group: { _id: '$role', count: { $sum: 1 } } },
     ]),
-    Event.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-    ]),
+    Event.find({}).select('status date'),
     Team.find({}).select('isActive lastActivityAt'),
   ]);
 
   const roleMap = new Map(userCounts.map((entry) => [entry._id, entry.count]));
-  const statusMap = new Map(eventCounts.map((entry) => [entry._id, entry.count]));
+  const totalEvents = events.length;
+  const today = getTodayStart();
+  const eventStatusSummary = events.reduce(
+    (summary, eventDoc) => {
+      summary[eventDoc.status] = (summary[eventDoc.status] || 0) + 1;
+
+      const eventDay = new Date(eventDoc.date);
+      eventDay.setHours(0, 0, 0, 0);
+      if (eventDoc.status === 'completed' || eventDay < today) {
+        summary.completedOrPassed += 1;
+      }
+      if (eventDay.getTime() === today.getTime()) {
+        summary.today += 1;
+      }
+      if (eventDay > today && eventDoc.status !== 'completed') {
+        summary.upcoming += 1;
+      }
+      return summary;
+    },
+    { planning: 0, allocated: 0, confirmed: 0, completed: 0, completedOrPassed: 0, today: 0, upcoming: 0 }
+  );
+
   const threshold = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const activeTeams = teams.filter(
     (team) => team.isActive && new Date(team.lastActivityAt || team.updatedAt || team.createdAt) >= threshold
@@ -732,12 +909,20 @@ const handleDashboardOverviewIntent = async ({ user, context }) => {
     (team) => team.isActive && new Date(team.lastActivityAt || team.updatedAt || team.createdAt) < threshold
   ).length;
 
-  return `Admin system overview:\nUsers - Volunteers: ${roleMap.get('volunteer') || 0}, Organizers: ${
+  return `Admin system overview:\nTotal users: ${totalUsers}\nUsers - Volunteers: ${
+    roleMap.get('volunteer') || 0
+  }, Organizers: ${
     roleMap.get('organizer') || 0
-  }, Admins: ${roleMap.get('admin') || 0}\nEvents - Planning: ${
-    statusMap.get('planning') || 0
-  }, Allocated: ${statusMap.get('allocated') || 0}, Completed: ${
-    statusMap.get('completed') || 0
+  }, Admins: ${roleMap.get('admin') || 0}\nTotal events: ${totalEvents}\nEvents - Planning: ${
+    eventStatusSummary.planning || 0
+  }, Allocated: ${eventStatusSummary.allocated || 0}, Confirmed: ${
+    eventStatusSummary.confirmed || 0
+  }, Completed: ${
+    eventStatusSummary.completed || 0
+  }\nEvent timeline - Completed or date-passed: ${
+    eventStatusSummary.completedOrPassed || 0
+  }, Today: ${eventStatusSummary.today || 0}, Upcoming: ${
+    eventStatusSummary.upcoming || 0
   }\nTeams - Registered: ${teams.length}, Active: ${activeTeams}, Inactive: ${inactiveTeams}`;
 };
 
