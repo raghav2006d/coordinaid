@@ -221,8 +221,80 @@ const INTENT_KEYWORDS = {
   ],
 };
 
+const parseRequestedCountEntities = (normalized = '') => {
+  const entities = [];
+  const hasCountIntent =
+    normalized.includes('total') ||
+    normalized.includes('how many') ||
+    normalized.includes('count') ||
+    normalized.includes('number of');
+
+  if (!hasCountIntent) return entities;
+
+  if (
+    normalized.includes('total users') ||
+    normalized.includes('how many users') ||
+    normalized.includes('user count') ||
+    normalized.includes('number of users')
+  ) {
+    entities.push('users');
+  }
+
+  if (
+    normalized.includes('total events') ||
+    normalized.includes('how many events') ||
+    normalized.includes('event count') ||
+    normalized.includes('number of events')
+  ) {
+    entities.push('events');
+  }
+
+  if (
+    normalized.includes('total teams') ||
+    normalized.includes('how many teams') ||
+    normalized.includes('team count') ||
+    normalized.includes('number of teams')
+  ) {
+    entities.push('teams');
+  }
+
+  if (
+    normalized.includes('total volunteers') ||
+    normalized.includes('how many volunteers') ||
+    normalized.includes('volunteer count') ||
+    normalized.includes('number of volunteers')
+  ) {
+    entities.push('volunteers');
+  }
+
+  if (
+    normalized.includes('total organizers') ||
+    normalized.includes('how many organizers') ||
+    normalized.includes('organizer count') ||
+    normalized.includes('number of organizers')
+  ) {
+    entities.push('organizers');
+  }
+
+  if (
+    normalized.includes('total admins') ||
+    normalized.includes('how many admins') ||
+    normalized.includes('admin count') ||
+    normalized.includes('number of admins')
+  ) {
+    entities.push('admins');
+  }
+
+  return [...new Set(entities)];
+};
+
 const parseIntent = (query = '') => {
   const normalized = normalizeQuery(query);
+  const requestedCountEntities = parseRequestedCountEntities(normalized);
+
+  if (requestedCountEntities.length) {
+    return 'entity_count';
+  }
 
   // Priority order avoids accidental matches (for example "pending team requests").
   if (hasAnyKeyword(normalized, INTENT_KEYWORDS.dashboard_overview)) {
@@ -312,10 +384,149 @@ const parseRoleKeyword = (query = '') => {
   return '';
 };
 
-const getQuickSuggestions = (role = 'volunteer') =>
-  QUICK_SUGGESTIONS_BY_ROLE[role] || QUICK_SUGGESTIONS_BY_ROLE.volunteer;
+const uniqueSuggestions = (items = []) => [...new Set(items.filter(Boolean).map((item) => String(item)))];
+
+const buildContextualSuggestions = (role = 'volunteer', context = {}) => {
+  const base = QUICK_SUGGESTIONS_BY_ROLE[role] || QUICK_SUGGESTIONS_BY_ROLE.volunteer;
+  const pageLabel = String(context?.pageLabel || '').toLowerCase();
+  const path = String(context?.currentPath || '').toLowerCase();
+  const extras = [];
+
+  if (role === 'volunteer') {
+    if (pageLabel === 'dashboard' || path.includes('/dashboard')) {
+      extras.push(
+        'What is my assigned role?',
+        'What assignments are pending for me?',
+        'Show my attendance summary',
+        'Do I have unread notifications?'
+      );
+    }
+    if (pageLabel === 'events' || path.includes('/events')) {
+      extras.push('When is my event?', 'What is event status?', 'Show my availability');
+    }
+    if (pageLabel === 'assignments' || path.includes('/assignments')) {
+      extras.push(
+        'What assignments are pending for me?',
+        'Show my assignment summary',
+        'Show my performance score'
+      );
+    }
+    if (pageLabel === 'attendance' || path.includes('/attendance')) {
+      extras.push('Show my attendance summary', 'What is my attendance rate?');
+    }
+    if (path.includes('/teams')) {
+      extras.push('How many teams am I in?', 'Any team announcements?', 'Do I have unread notifications?');
+    }
+  }
+
+  if (role === 'organizer') {
+    if (pageLabel === 'dashboard' || path.includes('/dashboard')) {
+      extras.push(
+        'What is my organizer dashboard summary?',
+        'Show pending assignments',
+        'Show pending team requests',
+        'Do I have unread notifications?'
+      );
+    }
+    if (pageLabel === 'events' || path.includes('/events')) {
+      extras.push(
+        'How many volunteers are assigned for this event?',
+        'Show staffing gaps for this event',
+        'Show attendance summary for this event',
+        'List volunteers for this event'
+      );
+    }
+    if (pageLabel === 'allocation' || path.includes('/allocation')) {
+      extras.push(
+        'Show staffing gaps for this event',
+        'Who is assigned to technical support?',
+        'Show top volunteers for my events'
+      );
+    }
+    if (pageLabel === 'attendance' || path.includes('/attendance')) {
+      extras.push('Show attendance summary for this event', 'How many volunteers are assigned for this event?');
+    }
+    if (path.includes('/teams')) {
+      extras.push('Show pending team requests', 'Show my teams', 'Any team announcements?');
+    }
+  }
+
+  if (role === 'admin') {
+    if (pageLabel === 'dashboard' || path.includes('/dashboard')) {
+      extras.push(
+        'What is total users and total events?',
+        'Total teams',
+        'Show system overview',
+        'Do I have unread notifications?'
+      );
+    }
+    if (pageLabel === 'events' || path.includes('/events')) {
+      extras.push(
+        'Show staffing gaps for this event',
+        'Show attendance summary for this event',
+        'How many volunteers are assigned for this event?'
+      );
+    }
+    if (pageLabel === 'allocation' || path.includes('/allocation')) {
+      extras.push(
+        'Show staffing gaps for this event',
+        'Show top volunteers overall',
+        'How many volunteers are assigned for this event?'
+      );
+    }
+    if (path.includes('/teams')) {
+      extras.push('Total teams', 'Any team announcements?', 'Show pending team requests');
+    }
+  }
+
+  return uniqueSuggestions([...extras, ...base]).slice(0, 12);
+};
+
+const getQuickSuggestions = (role = 'volunteer', context = {}) =>
+  buildContextualSuggestions(role, context);
 
 const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
+const wantsSummaryResponse = (normalized = '') =>
+  hasAnyKeyword(normalized, ['summary', 'overview', 'full', 'all', 'dashboard', 'detailed']);
+
+const extractAssignmentMetrics = (normalized = '') => {
+  const metrics = [];
+  if (hasAnyKeyword(normalized, ['total', 'count', 'how many'])) metrics.push('total');
+  if (normalized.includes('pending')) metrics.push('pending');
+  if (hasAnyKeyword(normalized, ['accepted', 'acceptance'])) metrics.push('accepted');
+  if (normalized.includes('completed')) metrics.push('completed');
+  if (hasAnyKeyword(normalized, ['declined', 'rejected'])) metrics.push('declined');
+  if (hasAnyKeyword(normalized, ['no show', 'no-show'])) metrics.push('no_show');
+  return [...new Set(metrics)];
+};
+
+const extractAttendanceMetrics = (normalized = '') => {
+  const metrics = [];
+  if (hasAnyKeyword(normalized, ['marked', 'attendance marked', 'total', 'count', 'how many'])) {
+    metrics.push('marked');
+  }
+  if (normalized.includes('present')) metrics.push('present');
+  if (normalized.includes('absent')) metrics.push('absent');
+  if (normalized.includes('late')) metrics.push('late');
+  if (hasAnyKeyword(normalized, ['attendance rate', 'rate', 'percentage'])) metrics.push('rate');
+  if (hasAnyKeyword(normalized, ['coverage', 'marking coverage'])) metrics.push('coverage');
+  return [...new Set(metrics)];
+};
+
+const extractPerformanceMetrics = (normalized = '') => {
+  const metrics = [];
+  if (hasAnyKeyword(normalized, ['performance', 'performance score', 'score'])) metrics.push('score');
+  if (hasAnyKeyword(normalized, ['acceptance', 'acceptance rate', 'accepted rate'])) {
+    metrics.push('acceptance_rate');
+  }
+  if (hasAnyKeyword(normalized, ['attendance rate', 'attendance percentage'])) {
+    metrics.push('attendance_rate');
+  }
+  if (hasAnyKeyword(normalized, ['accepted assignments', 'accepted count'])) {
+    metrics.push('accepted_assignments');
+  }
+  return [...new Set(metrics)];
+};
 
 const getUpcomingVolunteerAssignment = async (userId) => {
   const assignments = await Assignment.find({
@@ -392,7 +603,10 @@ const handleMyRoleIntent = async ({ user }) => {
   )}.`;
 };
 
-const handleEventIntent = async ({ user, context }) => {
+const handleEventIntent = async ({ user, context, query = '' }) => {
+  const normalized = normalizeQuery(query);
+  const asksStatusOnly = hasAnyKeyword(normalized, ['status', 'completed', 'date passed']);
+
   if (user.role === 'volunteer') {
     const assignment = await getUpcomingVolunteerAssignment(user.userId);
     if (!assignment) {
@@ -408,6 +622,10 @@ const handleEventIntent = async ({ user, context }) => {
         : eventState === 'today'
         ? 'Today'
         : 'Upcoming';
+
+    if (asksStatusOnly) {
+      return `Event status: ${eventStateText}`;
+    }
 
     return `Your next event is ${assignment.eventId?.eventName || 'an event'} on ${formatDate(
       assignment.eventId?.date
@@ -432,6 +650,10 @@ const handleEventIntent = async ({ user, context }) => {
       : eventState === 'today'
       ? 'Today'
       : 'Upcoming';
+
+  if (asksStatusOnly) {
+    return `Event status: ${eventStateText}`;
+  }
 
   return `Next event: ${contextEvent.eventName} on ${formatDate(contextEvent.date)} at ${formatTimeRange(
     contextEvent
@@ -530,7 +752,11 @@ const handlePendingAssignmentsIntent = async ({ user }) => {
     : 'No pending assignment responses found.';
 };
 
-const handleAssignmentOverviewIntent = async ({ user }) => {
+const handleAssignmentOverviewIntent = async ({ user, query = '' }) => {
+  const normalized = normalizeQuery(query);
+  const requestedMetrics = extractAssignmentMetrics(normalized);
+  const selective = requestedMetrics.length > 0 && !wantsSummaryResponse(normalized);
+
   if (user.role === 'volunteer') {
     const assignments = await Assignment.find({ volunteerId: user.userId }).select('status');
     if (!assignments.length) {
@@ -545,6 +771,17 @@ const handleAssignmentOverviewIntent = async ({ user }) => {
       },
       { total: 0, pending: 0, accepted: 0, declined: 0, completed: 0, 'no-show': 0 }
     );
+
+    if (selective) {
+      const lines = [];
+      if (requestedMetrics.includes('total')) lines.push(`Total: ${stats.total}`);
+      if (requestedMetrics.includes('pending')) lines.push(`Pending: ${stats.pending}`);
+      if (requestedMetrics.includes('accepted')) lines.push(`Accepted: ${stats.accepted}`);
+      if (requestedMetrics.includes('completed')) lines.push(`Completed: ${stats.completed}`);
+      if (requestedMetrics.includes('declined')) lines.push(`Declined: ${stats.declined}`);
+      if (requestedMetrics.includes('no_show')) lines.push(`No-show: ${stats['no-show']}`);
+      if (lines.length) return lines.join('\n');
+    }
 
     return `Your assignment summary:\nTotal: ${stats.total}\nPending: ${stats.pending}\nAccepted: ${stats.accepted}\nCompleted: ${stats.completed}\nDeclined: ${stats.declined}\nNo-show: ${stats['no-show']}`;
   }
@@ -571,10 +808,25 @@ const handleAssignmentOverviewIntent = async ({ user }) => {
     { total: 0, pending: 0, accepted: 0, declined: 0, completed: 0, 'no-show': 0 }
   );
 
+  if (selective) {
+    const lines = [];
+    if (requestedMetrics.includes('total')) lines.push(`Total: ${stats.total}`);
+    if (requestedMetrics.includes('pending')) lines.push(`Pending: ${stats.pending}`);
+    if (requestedMetrics.includes('accepted')) lines.push(`Accepted: ${stats.accepted}`);
+    if (requestedMetrics.includes('completed')) lines.push(`Completed: ${stats.completed}`);
+    if (requestedMetrics.includes('declined')) lines.push(`Declined: ${stats.declined}`);
+    if (requestedMetrics.includes('no_show')) lines.push(`No-show: ${stats['no-show']}`);
+    if (lines.length) return lines.join('\n');
+  }
+
   return `Assignment summary across ${user.role === 'organizer' ? 'your events' : 'the system'}:\nTotal: ${stats.total}\nPending: ${stats.pending}\nAccepted: ${stats.accepted}\nCompleted: ${stats.completed}\nDeclined: ${stats.declined}\nNo-show: ${stats['no-show']}`;
 };
 
-const handleAttendanceSummaryIntent = async ({ user, context }) => {
+const handleAttendanceSummaryIntent = async ({ user, context, query = '' }) => {
+  const normalized = normalizeQuery(query);
+  const requestedMetrics = extractAttendanceMetrics(normalized);
+  const selective = requestedMetrics.length > 0 && !wantsSummaryResponse(normalized);
+
   if (user.role === 'volunteer') {
     const records = await Attendance.find({ volunteerId: user.userId }).select('status');
     if (!records.length) {
@@ -590,6 +842,16 @@ const handleAttendanceSummaryIntent = async ({ user, context }) => {
       { total: 0, present: 0, absent: 0, 'marked-late': 0 }
     );
     const attendanceRate = stats.total ? (stats.present / stats.total) * 100 : 0;
+
+    if (selective) {
+      const lines = [];
+      if (requestedMetrics.includes('marked')) lines.push(`Marked: ${stats.total}`);
+      if (requestedMetrics.includes('present')) lines.push(`Present: ${stats.present}`);
+      if (requestedMetrics.includes('absent')) lines.push(`Absent: ${stats.absent}`);
+      if (requestedMetrics.includes('late')) lines.push(`Late: ${stats['marked-late']}`);
+      if (requestedMetrics.includes('rate')) lines.push(`Attendance rate: ${formatPercent(attendanceRate)}`);
+      if (lines.length) return lines.join('\n');
+    }
 
     return `Your attendance summary:\nMarked: ${stats.total}\nPresent: ${stats.present}\nAbsent: ${stats.absent}\nLate: ${stats['marked-late']}\nAttendance rate: ${formatPercent(attendanceRate)}`;
   }
@@ -611,6 +873,18 @@ const handleAttendanceSummaryIntent = async ({ user, context }) => {
   ]);
 
   const coverage = assignmentsCount ? (markedCount / assignmentsCount) * 100 : 0;
+  if (selective) {
+    const lines = [];
+    if (requestedMetrics.includes('marked')) lines.push(`Marked: ${markedCount}/${assignmentsCount}`);
+    if (requestedMetrics.includes('present')) lines.push(`Present: ${presentCount}`);
+    if (requestedMetrics.includes('absent')) lines.push(`Absent: ${absentCount}`);
+    if (requestedMetrics.includes('late')) lines.push(`Late: ${lateCount}`);
+    if (requestedMetrics.includes('rate') || requestedMetrics.includes('coverage')) {
+      lines.push(`Marking coverage: ${formatPercent(coverage)}`);
+    }
+    if (lines.length) return lines.join('\n');
+  }
+
   return `Attendance summary for ${contextEvent.eventName}:\nMarked: ${markedCount}/${assignmentsCount}\nPresent: ${presentCount}\nAbsent: ${absentCount}\nLate: ${lateCount}\nMarking coverage: ${formatPercent(coverage)}`;
 };
 
@@ -635,13 +909,36 @@ const getScopedEventIds = async ({ user, context }) => {
   );
 };
 
-const handlePerformanceSummaryIntent = async ({ user, context }) => {
+const handlePerformanceSummaryIntent = async ({ user, context, query = '' }) => {
+  const normalized = normalizeQuery(query);
+  const requestedMetrics = extractPerformanceMetrics(normalized);
+  const selective = requestedMetrics.length > 0 && !wantsSummaryResponse(normalized);
+
   if (user.role === 'volunteer') {
     const profile = await User.findById(user.userId).select(
       'performanceScore acceptanceRate attendanceRate acceptedAssignments totalAssignments'
     );
     if (!profile) {
       return 'Unable to load your performance profile right now.';
+    }
+
+    if (selective) {
+      const lines = [];
+      if (requestedMetrics.includes('score')) {
+        lines.push(`Performance score: ${Number(profile.performanceScore || 0).toFixed(1)}`);
+      }
+      if (requestedMetrics.includes('acceptance_rate')) {
+        lines.push(`Acceptance rate: ${formatPercent(profile.acceptanceRate || 0)}`);
+      }
+      if (requestedMetrics.includes('attendance_rate')) {
+        lines.push(`Attendance rate: ${formatPercent(profile.attendanceRate || 0)}`);
+      }
+      if (requestedMetrics.includes('accepted_assignments')) {
+        lines.push(
+          `Accepted assignments: ${profile.acceptedAssignments || 0}/${profile.totalAssignments || 0}`
+        );
+      }
+      if (lines.length) return lines.join('\n');
     }
 
     return `Your performance snapshot:\nPerformance score: ${Number(
@@ -696,7 +993,12 @@ const handlePerformanceSummaryIntent = async ({ user, context }) => {
   return `${user.role === 'organizer' ? 'Top volunteers in your event scope' : 'Top volunteers in current scope'}:\n${lines}`;
 };
 
-const handleStaffingInsightsIntent = async ({ user, context }) => {
+const handleStaffingInsightsIntent = async ({ user, context, query = '' }) => {
+  const normalized = normalizeQuery(query);
+  const asksCoverageOnly = hasAnyKeyword(normalized, ['coverage', 'role coverage']);
+  const asksVolunteersNeededOnly = hasAnyKeyword(normalized, ['volunteers needed', 'target', 'required volunteers']);
+  const asksAssignedOnly = hasAnyKeyword(normalized, ['how many volunteers are assigned', 'assigned volunteers']);
+
   if (user.role === 'volunteer') {
     return 'Staffing insights are available for organizers/admin. You can still ask about your role or availability.';
   }
@@ -754,6 +1056,16 @@ const handleStaffingInsightsIntent = async ({ user, context }) => {
     coverage
   )})\nAI volunteer target by crowd size: ${suggestedVolunteers}`;
 
+  if (asksCoverageOnly) {
+    return `Role coverage: ${totalAssigned}/${totalRequired} (${formatPercent(coverage)})`;
+  }
+  if (asksVolunteersNeededOnly) {
+    return `AI volunteer target: ${suggestedVolunteers}`;
+  }
+  if (asksAssignedOnly) {
+    return `Assigned volunteers: ${totalAssigned}`;
+  }
+
   if (!gapLines.length) {
     return `${summary}\nAll configured roles are currently filled.`;
   }
@@ -806,7 +1118,10 @@ const handleTeamAnnouncementsIntent = async ({ user }) => {
   return `Recent team announcements:\n${lines.join('\n')}`;
 };
 
-const handleNotificationsIntent = async ({ user }) => {
+const handleNotificationsIntent = async ({ user, query = '' }) => {
+  const normalized = normalizeQuery(query);
+  const unreadOnly = hasAnyKeyword(normalized, ['unread', 'count', 'how many', 'total']) && !hasAnyKeyword(normalized, ['latest', 'recent', 'updates', 'show']);
+
   const [unreadCount, latest] = await Promise.all([
     Notification.countDocuments({ userId: user.userId, isRead: false }),
     Notification.find({ userId: user.userId })
@@ -814,6 +1129,10 @@ const handleNotificationsIntent = async ({ user }) => {
       .limit(3)
       .select('title type createdAt'),
   ]);
+
+  if (unreadOnly) {
+    return `Unread notifications: ${unreadCount}`;
+  }
 
   if (!latest.length) {
     return unreadCount
@@ -926,8 +1245,108 @@ const handleDashboardOverviewIntent = async ({ user, context }) => {
   }\nTeams - Registered: ${teams.length}, Active: ${activeTeams}, Inactive: ${inactiveTeams}`;
 };
 
-const handleTeamsIntent = async ({ user }) => {
+const handleEntityCountIntent = async ({ user, query }) => {
+  const normalized = normalizeQuery(query);
+  const requestedEntities = parseRequestedCountEntities(normalized);
+
+  if (!requestedEntities.length) {
+    return buildFallbackMessage();
+  }
+
+  const lines = [];
+
+  for (const entity of requestedEntities) {
+    if (entity === 'users') {
+      if (user.role !== 'admin') {
+        lines.push('Total users: available for admin only.');
+      } else {
+        const total = await User.countDocuments({});
+        lines.push(`Total users: ${total}`);
+      }
+      continue;
+    }
+
+    if (entity === 'events') {
+      if (user.role === 'admin') {
+        const total = await Event.countDocuments({});
+        lines.push(`Total events: ${total}`);
+      } else if (user.role === 'organizer') {
+        const total = await Event.countDocuments({ createdBy: user.userId });
+        lines.push(`Total events: ${total}`);
+      } else {
+        const assigned = await Assignment.distinct('eventId', { volunteerId: user.userId });
+        lines.push(`Total events: ${assigned.length}`);
+      }
+      continue;
+    }
+
+    if (entity === 'teams') {
+      if (user.role === 'admin') {
+        const total = await Team.countDocuments({});
+        lines.push(`Total teams: ${total}`);
+      } else if (user.role === 'organizer') {
+        const total = await Team.countDocuments({ organizerId: user.userId, isActive: true });
+        lines.push(`Total teams: ${total}`);
+      } else {
+        const total = await Team.countDocuments({
+          isActive: true,
+          'members.volunteerId': user.userId,
+        });
+        lines.push(`Total teams: ${total}`);
+      }
+      continue;
+    }
+
+    if (entity === 'volunteers') {
+      if (user.role !== 'admin') {
+        lines.push('Total volunteers: available for admin only.');
+      } else {
+        const total = await User.countDocuments({ role: 'volunteer' });
+        lines.push(`Total volunteers: ${total}`);
+      }
+      continue;
+    }
+
+    if (entity === 'organizers') {
+      if (user.role !== 'admin') {
+        lines.push('Total organizers: available for admin only.');
+      } else {
+        const total = await User.countDocuments({ role: 'organizer' });
+        lines.push(`Total organizers: ${total}`);
+      }
+      continue;
+    }
+
+    if (entity === 'admins') {
+      if (user.role !== 'admin') {
+        lines.push('Total admins: available for admin only.');
+      } else {
+        const total = await User.countDocuments({ role: 'admin' });
+        lines.push(`Total admins: ${total}`);
+      }
+    }
+  }
+
+  return lines.join('\n');
+};
+
+const handleTeamsIntent = async ({ user, query = '' }) => {
+  const normalized = normalizeQuery(query);
+  const asksPendingRequestsOnly = hasAnyKeyword(normalized, ['pending team requests', 'pending requests', 'team requests']);
+  const asksJoinCodeOnly = hasAnyKeyword(normalized, ['join code', 'team code']);
+  const asksTeamCountOnly =
+    hasAnyKeyword(normalized, ['team count', 'total teams', 'how many teams']) &&
+    !wantsSummaryResponse(normalized);
+
   if (user.role === 'volunteer') {
+    if (asksTeamCountOnly) {
+      const total = await Team.countDocuments({
+        isActive: true,
+        'members.volunteerId': user.userId,
+      });
+      return `Total teams: ${total}`;
+    }
+
     const teams = await Team.find({
       isActive: true,
       'members.volunteerId': user.userId,
@@ -956,6 +1375,14 @@ const handleTeamsIntent = async ({ user }) => {
   }
 
   if (user.role === 'organizer') {
+    if (asksTeamCountOnly) {
+      const total = await Team.countDocuments({
+        isActive: true,
+        organizerId: user.userId,
+      });
+      return `Total teams: ${total}`;
+    }
+
     const teams = await Team.find({
       isActive: true,
       organizerId: user.userId,
@@ -969,6 +1396,18 @@ const handleTeamsIntent = async ({ user }) => {
       (sum, team) => sum + (team.pendingRequests?.length || 0),
       0
     );
+
+    if (asksPendingRequestsOnly) {
+      return `Pending team requests: ${pendingTotal}`;
+    }
+    if (asksJoinCodeOnly) {
+      const codes = teams
+        .slice(0, 5)
+        .map((team, index) => `${index + 1}. ${team.name}: ${team.joinCode}`)
+        .join('\n');
+      return `Team join codes:\n${codes}`;
+    }
+
     const summary = teams
       .slice(0, 5)
       .map(
@@ -997,28 +1436,30 @@ export const queryCoordinatorAssistant = async (req, res) => {
 
     if (intent === 'my_role') {
       responseText = await handleMyRoleIntent({ user: req.user });
+    } else if (intent === 'entity_count') {
+      responseText = await handleEntityCountIntent({ user: req.user, query });
     } else if (intent === 'event_details') {
-      responseText = await handleEventIntent({ user: req.user, context });
+      responseText = await handleEventIntent({ user: req.user, context, query });
     } else if (intent === 'volunteers_by_role') {
       responseText = await handleVolunteersIntent({ user: req.user, query, context });
     } else if (intent === 'availability') {
       responseText = await handleAvailabilityIntent({ user: req.user });
     } else if (intent === 'teams') {
-      responseText = await handleTeamsIntent({ user: req.user });
+      responseText = await handleTeamsIntent({ user: req.user, query });
     } else if (intent === 'pending_assignments') {
       responseText = await handlePendingAssignmentsIntent({ user: req.user });
     } else if (intent === 'assignment_overview') {
-      responseText = await handleAssignmentOverviewIntent({ user: req.user });
+      responseText = await handleAssignmentOverviewIntent({ user: req.user, query });
     } else if (intent === 'attendance_summary') {
-      responseText = await handleAttendanceSummaryIntent({ user: req.user, context });
+      responseText = await handleAttendanceSummaryIntent({ user: req.user, context, query });
     } else if (intent === 'performance_summary') {
-      responseText = await handlePerformanceSummaryIntent({ user: req.user, context });
+      responseText = await handlePerformanceSummaryIntent({ user: req.user, context, query });
     } else if (intent === 'staffing_insights') {
-      responseText = await handleStaffingInsightsIntent({ user: req.user, context });
+      responseText = await handleStaffingInsightsIntent({ user: req.user, context, query });
     } else if (intent === 'team_announcements') {
       responseText = await handleTeamAnnouncementsIntent({ user: req.user });
     } else if (intent === 'notifications') {
-      responseText = await handleNotificationsIntent({ user: req.user });
+      responseText = await handleNotificationsIntent({ user: req.user, query });
     } else if (intent === 'dashboard_overview') {
       responseText = await handleDashboardOverviewIntent({ user: req.user, context });
     } else {
@@ -1028,7 +1469,7 @@ export const queryCoordinatorAssistant = async (req, res) => {
     res.json({
       intent,
       response: responseText,
-      quickSuggestions: getQuickSuggestions(req.user.role),
+      quickSuggestions: getQuickSuggestions(req.user.role, context),
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -1040,7 +1481,7 @@ export const queryCoordinatorAssistant = async (req, res) => {
 export const getCoordinatorSuggestions = async (req, res) => {
   try {
     const context = req.body?.context || {};
-    const suggestions = getQuickSuggestions(req.user.role);
+    const suggestions = getQuickSuggestions(req.user.role, context);
     const reminders = [];
 
     if (req.user.role === 'volunteer') {
