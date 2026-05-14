@@ -21,17 +21,17 @@ const REQUIRED_QUICK_ACTIONS_BY_ROLE = {
   volunteer: [
     { label: 'My Role', query: 'What is my assigned role?' },
     { label: 'My Event', query: 'When is my event?' },
-    { label: 'Attendance', query: 'Show my attendance summary' },
+    { label: 'Notifications', query: 'Do I have unread notifications?' },
   ],
   organizer: [
     { label: 'Staffing', query: 'Show staffing gaps for this event' },
-    { label: 'Attendance', query: 'Show attendance summary for this event' },
+    { label: 'Assigned Count', query: 'How many volunteers are assigned for this event?' },
     { label: 'Top Volunteers', query: 'Show top volunteers for my events' },
   ],
   admin: [
     { label: 'System', query: 'Show system overview' },
+    { label: 'Users/Events', query: 'What is total users and total events?' },
     { label: 'Staffing', query: 'Show staffing gaps for this event' },
-    { label: 'Top Volunteers', query: 'Show top volunteers overall' },
   ],
 };
 
