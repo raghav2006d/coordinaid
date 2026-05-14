@@ -43,7 +43,15 @@ export const assistantAPI = {
 
 export const teamAPI = {
   getTeams: () => apiClient.get('/teams'),
+  getTeamMessages: (teamId, params) => apiClient.get(`/teams/${teamId}/messages`, { params }),
+  sendTeamMessage: (teamId, data) => apiClient.post(`/teams/${teamId}/messages`, data),
+  sendTeamAnnouncement: (teamId, data) => apiClient.post(`/teams/${teamId}/announcements`, data),
   createTeam: (data) => apiClient.post('/teams', data),
+  updateTeam: (teamId, data) => apiClient.put(`/teams/${teamId}`, data),
+  uploadTeamLogo: (teamId, formData) =>
+    apiClient.post(`/teams/${teamId}/logo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   joinByCode: (data) => apiClient.post('/teams/join-by-code', data),
   applyToTeam: (teamId, data = {}) => apiClient.post(`/teams/${teamId}/apply`, data),
   approveRequest: (teamId, volunteerId) =>
@@ -55,6 +63,14 @@ export const teamAPI = {
   regenerateCode: (teamId) => apiClient.post(`/teams/${teamId}/regenerate-code`),
   runTeamAllocation: (teamId, data) => apiClient.post(`/teams/${teamId}/allocation/run`, data),
   getTeamReport: (teamId, params) => apiClient.get(`/teams/${teamId}/report`, { params }),
+  exportTeamAllocationsCsv: (teamId, params) =>
+    apiClient.get(`/teams/${teamId}/allocation/export-csv`, { params, responseType: 'blob' }),
+  exportTeamAllocationsPdf: (teamId, params) =>
+    apiClient.get(`/teams/${teamId}/allocation/export-pdf`, { params, responseType: 'blob' }),
+};
+
+export const adminAPI = {
+  getTeamInsights: () => apiClient.get('/admin/teams/insights'),
 };
 
 // User APIs

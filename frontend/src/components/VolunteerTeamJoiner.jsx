@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { KeyRound, Send, Users } from 'lucide-react';
 import { teamAPI } from '../utils/api.js';
+import TeamChatPanel from './TeamChatPanel.jsx';
 
 const VolunteerTeamJoiner = () => {
   const [teams, setTeams] = useState([]);
@@ -134,6 +135,9 @@ const VolunteerTeamJoiner = () => {
                 <p className="text-xs text-[#5f5a7a]">
                   Organizer: {team.organizerId?.name || 'Organizer'} | Members: {team.members?.length || 0}
                 </p>
+                <div className="mt-2">
+                  <TeamChatPanel team={team} />
+                </div>
               </div>
             ))}
           </div>

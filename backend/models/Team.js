@@ -49,6 +49,21 @@ const teamSchema = new mongoose.Schema(
       default: '',
       maxlength: 400,
     },
+    logoUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    focusArea: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: 120,
+    },
+    preferredEventTypes: {
+      type: [String],
+      default: [],
+    },
     organizerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -66,6 +81,11 @@ const teamSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    lastActivityAt: {
+      type: Date,
+      default: Date.now,
+      index: true,
     },
     members: {
       type: [teamMemberSchema],

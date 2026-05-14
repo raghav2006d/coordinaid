@@ -59,7 +59,7 @@ app.use('/api/teams', teamRoutes);
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Volunteer Allocation backend is running',
+    message: 'Coordinaid backend is running',
     apiBaseUrl: `http://localhost:${PORT}/api`,
     healthCheck: `http://localhost:${PORT}/api/health`,
   });

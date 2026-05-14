@@ -16,7 +16,7 @@ import {
 import Sidebar from '../components/Sidebar.jsx';
 import Header from '../components/Header.jsx';
 import Card from '../components/Card.jsx';
-import apiClient, { assignmentAPI, eventAPI, userAPI } from '../utils/api.js';
+import apiClient, { adminAPI, assignmentAPI, eventAPI, userAPI } from '../utils/api.js';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
@@ -29,6 +29,7 @@ const AdminDashboard = () => {
   const [runningBackfill, setRunningBackfill] = useState(false);
   const [runningHistoryBackfill, setRunningHistoryBackfill] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState('');
+  const [teamInsights, setTeamInsights] = useState({ summary: null, teams: [] });
 
   useEffect(() => {
     fetchStats();
@@ -36,12 +37,14 @@ const AdminDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const [usersRes, eventsRes, assignRes] = await Promise.all([
+      const [usersRes, eventsRes, assignRes, teamRes] = await Promise.all([
         userAPI.getAllUsers({ limit: 200 }),
         eventAPI.getEvents({ limit: 200 }),
         assignmentAPI.getAssignments({ limit: 200 }),
+        adminAPI.getTeamInsights(),
       ]);
 
+      setTeamInsights(teamRes.data || { summary: null, teams: [] });
       const users = usersRes.data.users || [];
       setUsers(users);
       const events = eventsRes.data.events || [];
@@ -67,6 +70,9 @@ const AdminDashboard = () => {
         averageMatchScore,
         liveEvents: events.filter((event) => event.status !== 'completed').length,
         completionRate: totalAssignments ? Math.round((acceptedAssignments / totalAssignments) * 100) : 0,
+        registeredTeams: teamRes.data?.summary?.registeredTeams || 0,
+        activeTeams: teamRes.data?.summary?.activeTeams || 0,
+        inactiveTeams: teamRes.data?.summary?.inactiveTeams || 0,
       });
     } catch (error) {
       console.error('Failed to fetch stats:', error);
@@ -274,6 +280,14 @@ const AdminDashboard = () => {
                 <div className="rounded-[22px] bg-[#eef8f3] p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-[#6b8d80]">Acceptance</p>
                   <p className="mt-2 text-3xl font-black text-[#1d1736]">{stats?.completionRate || 0}%</p>
+                </div>
+                <div className="rounded-[22px] bg-[#f2f6ff] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#4b46c8]">Active Teams</p>
+                  <p className="mt-2 text-3xl font-black text-[#1d1736]">{stats?.activeTeams || 0}</p>
+                </div>
+                <div className="rounded-[22px] bg-[#fff6e7] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#8a5c19]">Inactive Teams</p>
+                  <p className="mt-2 text-3xl font-black text-[#1d1736]">{stats?.inactiveTeams || 0}</p>
                 </div>
               </div>
             </Card>
@@ -541,6 +555,84 @@ const AdminDashboard = () => {
                       <tr>
                         <td colSpan="6" className="px-3 py-6 text-center text-[#5f5a7a]">
                           No users found for this filter.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </motion.section>
+
+          <motion.section
+            id="teams"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8"
+          >
+            <Card hoverable={false} className="shell-panel border-0 p-7">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#766e97]">Team Registry</p>
+                  <h3 className="mt-2 text-2xl font-bold text-[#1d1736]">Active, inactive, and registered teams</h3>
+                </div>
+                <Users size={22} className="text-[#4b46c8]" />
+              </div>
+
+              <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="rounded-[20px] bg-[#f1ecff] p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#766e97]">Registered</p>
+                  <p className="mt-2 text-3xl font-black text-[#1d1736]">{teamInsights.summary?.registeredTeams || 0}</p>
+                </div>
+                <div className="rounded-[20px] bg-[#eef8f3] p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#6b8d80]">Active</p>
+                  <p className="mt-2 text-3xl font-black text-[#1d1736]">{teamInsights.summary?.activeTeams || 0}</p>
+                </div>
+                <div className="rounded-[20px] bg-[#fff6e7] p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#8a5c19]">Inactive</p>
+                  <p className="mt-2 text-3xl font-black text-[#1d1736]">{teamInsights.summary?.inactiveTeams || 0}</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-gray-200">
+                    <tr className="text-xs uppercase tracking-wide text-[#766e97]">
+                      <th className="px-3 py-3">Team</th>
+                      <th className="px-3 py-3">Organizer</th>
+                      <th className="px-3 py-3">Members</th>
+                      <th className="px-3 py-3">Messages</th>
+                      <th className="px-3 py-3">Last Activity</th>
+                      <th className="px-3 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {teamInsights.teams?.map((team) => (
+                      <tr key={team._id} className="hover:bg-[#f8f5ff]">
+                        <td className="px-3 py-3 font-semibold text-[#1d1736]">{team.name}</td>
+                        <td className="px-3 py-3 text-[#5f5a7a]">{team.organizerId?.name || 'Organizer'}</td>
+                        <td className="px-3 py-3 text-[#5f5a7a]">{team.memberCount || 0}</td>
+                        <td className="px-3 py-3 text-[#5f5a7a]">{team.messageCount || 0}</td>
+                        <td className="px-3 py-3 text-[#5f5a7a]">
+                          {team.lastActivityAt ? new Date(team.lastActivityAt).toLocaleString() : '-'}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`badge ${
+                            team.statusLabel === 'active'
+                              ? 'badge-success'
+                              : team.statusLabel === 'inactive'
+                              ? 'badge-warning'
+                              : 'badge-primary'
+                          }`}>
+                            {team.statusLabel || 'registered'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {!teamInsights.teams?.length && (
+                      <tr>
+                        <td colSpan="6" className="px-3 py-6 text-center text-[#5f5a7a]">
+                          No teams registered yet.
                         </td>
                       </tr>
                     )}

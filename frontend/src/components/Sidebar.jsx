@@ -58,6 +58,7 @@ const Sidebar = () => {
     admin: [
       { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
       { label: 'Users', path: '/dashboard#users', icon: 'users' },
+      { label: 'Teams', path: '/dashboard#teams', icon: 'volunteers' },
       { label: 'Events', path: '/dashboard#events', icon: 'events' },
       { label: 'Reports', path: '/analytics', icon: 'reports' },
     ],
@@ -85,8 +86,8 @@ const Sidebar = () => {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
             <Sparkles size={22} />
           </div>
-          <h1 className="relative text-2xl font-bold">SmartVolunteer</h1>
-          <p className="relative mt-2 text-sm text-violet-100">Volunteer operations with a smarter, premium control panel.</p>
+          <h1 className="relative text-2xl font-bold">Coordinaid</h1>
+          <p className="relative mt-2 text-sm text-violet-100">Smart Event Volunteer Allocation System.</p>
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto">

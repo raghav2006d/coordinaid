@@ -1,6 +1,6 @@
-# Smart Event Volunteer Allocation System
+# Coordinaid
 
-A full-stack web app for colleges that automates volunteer assignment for events using skill-based AI matching, adaptive learning, and organizer-friendly workflows.
+Smart Event Volunteer Allocation System
 
 ## Highlights
 

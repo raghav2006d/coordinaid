@@ -17,11 +17,23 @@ const QUICK_ACTIONS_FALLBACK = [
   'Show my availability',
 ];
 
-const REQUIRED_QUICK_ACTIONS = [
-  { label: 'My Role', query: 'What is my assigned role?' },
-  { label: 'My Event', query: 'When is my event?' },
-  { label: 'Show Volunteers', query: 'List volunteers for this event' },
-];
+const REQUIRED_QUICK_ACTIONS_BY_ROLE = {
+  volunteer: [
+    { label: 'My Role', query: 'What is my assigned role?' },
+    { label: 'My Event', query: 'When is my event?' },
+    { label: 'Attendance', query: 'Show my attendance summary' },
+  ],
+  organizer: [
+    { label: 'Staffing', query: 'Show staffing gaps for this event' },
+    { label: 'Attendance', query: 'Show attendance summary for this event' },
+    { label: 'Top Volunteers', query: 'Show top volunteers for my events' },
+  ],
+  admin: [
+    { label: 'System', query: 'Show system overview' },
+    { label: 'Staffing', query: 'Show staffing gaps for this event' },
+    { label: 'Top Volunteers', query: 'Show top volunteers overall' },
+  ],
+};
 
 const createMessage = (role, text) => ({
   id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -69,6 +81,12 @@ const CoordinatorBot = ({ user }) => {
     if (!user?._id) return '';
     return `coordinator-bot-history-${user._id}`;
   }, [user?._id]);
+
+  const requiredQuickActions = useMemo(
+    () =>
+      REQUIRED_QUICK_ACTIONS_BY_ROLE[user?.role] || REQUIRED_QUICK_ACTIONS_BY_ROLE.volunteer,
+    [user?.role]
+  );
 
   useEffect(() => {
     if (!historyKey) return;
@@ -188,7 +206,7 @@ const CoordinatorBot = ({ user }) => {
 
           <div className="border-b border-[#ecebff] px-4 py-3">
             <div className="mb-2 flex flex-wrap gap-2">
-              {REQUIRED_QUICK_ACTIONS.map((action) => (
+              {requiredQuickActions.map((action) => (
                 <button
                   key={action.label}
                   type="button"
@@ -201,7 +219,7 @@ const CoordinatorBot = ({ user }) => {
             </div>
 
             <div className="mb-2 flex flex-wrap gap-2">
-              {(quickActions || QUICK_ACTIONS_FALLBACK).slice(0, 2).map((action) => (
+              {(quickActions || QUICK_ACTIONS_FALLBACK).slice(0, 4).map((action) => (
                 <button
                   key={action}
                   type="button"

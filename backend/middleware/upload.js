@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const attendanceDir = path.join(__dirname, '..', 'uploads', 'attendance');
 const profileDir = path.join(__dirname, '..', 'uploads', 'profiles');
 const eventsDir = path.join(__dirname, '..', 'uploads', 'events');
+const teamsDir = path.join(__dirname, '..', 'uploads', 'teams');
 
 if (!fs.existsSync(attendanceDir)) {
   fs.mkdirSync(attendanceDir, { recursive: true });
@@ -17,6 +18,9 @@ if (!fs.existsSync(profileDir)) {
 }
 if (!fs.existsSync(eventsDir)) {
   fs.mkdirSync(eventsDir, { recursive: true });
+}
+if (!fs.existsSync(teamsDir)) {
+  fs.mkdirSync(teamsDir, { recursive: true });
 }
 
 const attendanceStorage = multer.diskStorage({
@@ -87,3 +91,21 @@ export const eventMottoImageUpload = multer({
   fileFilter: imageFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 },
 }).single('mottoImage');
+
+const teamAssetStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, teamsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const base = file.originalname.replace(/\.[^/.]+$/, '').replace(/[^a-z0-9-_]/gi, '');
+    const safeBase = base ? base.slice(0, 40) : 'team-logo';
+    cb(null, `${safeBase}-${Date.now()}${ext || '.jpg'}`);
+  },
+});
+
+export const teamLogoUpload = multer({
+  storage: teamAssetStorage,
+  fileFilter: imageFileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
+}).single('teamLogo');
